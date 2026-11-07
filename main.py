@@ -441,6 +441,48 @@ def run_json_mode(path=DATA_FILE):
 
 
 # ---------------------------------------------------------------
+# 모드 3 (보너스): 패턴 생성기
+# ---------------------------------------------------------------
+
+def read_size():
+    """생성할 크기 N 을 입력받는다. 십자가의 가운데 줄이 있도록 3 이상의 홀수만 받는다."""
+    while True:
+        text = input("크기 N 입력 (3 이상의 홀수): ").strip()
+        if text.isdigit() and int(text) >= 3 and int(text) % 2 == 1:
+            return int(text)
+        print("입력 형식 오류: 3 이상의 홀수를 입력하세요.")
+
+
+def print_matrix(title, matrix):
+    """배열을 한 줄에 한 행씩 출력한다."""
+    print(title)
+    size = len(matrix)
+    for row in range(size):
+        print(" ".join(f"{get_value(matrix, row, col):g}" for col in range(size)))
+
+
+def run_generator_mode():
+    """모드 3: N×N 십자가와 X 패턴을 만들고, 모드 1 판정 방식과 성능 분석에 다시 쓴다."""
+    print_section("[1] 패턴 생성")
+    size = read_size()
+    cross = generate_cross(size)
+    x_pattern = generate_x(size)
+    print_matrix(f"{CROSS} 패턴 ({size}×{size})", cross)
+    print_matrix(f"{X} 패턴 ({size}×{size})", x_pattern)
+
+    # 생성한 두 패턴을 필터 A(Cross), B(X)로 두고 모드 1과 같은 방식으로 판정한다.
+    print_section(f"[2] MAC 결과 (필터 A = {CROSS}, 필터 B = {X})")
+    for name, pattern in ((CROSS, cross), (X, x_pattern)):
+        score_a = mac(pattern, cross)
+        score_b = mac(pattern, x_pattern)
+        decision = judge(score_a, score_b, "A", "B", "판정 불가")
+        print(f"{name} 패턴 입력 -> A 점수: {score_a}, B 점수: {score_b}, 판정: {decision}")
+
+    print_section(f"[3] 성능 분석 (평균/{REPEAT}회)")
+    print_performance_table([(size, measure_ms(mac, cross, x_pattern))])
+
+
+# ---------------------------------------------------------------
 # 시작: 모드 선택
 # ---------------------------------------------------------------
 
@@ -450,15 +492,18 @@ def main():
     print("[모드 선택]")
     print("1. 사용자 입력 (3x3)")
     print("2. data.json 분석")
+    print("3. 패턴 생성기 (보너스)")
     choice = input("선택: ").strip()
-    while choice not in ("1", "2"):
-        print("1 또는 2를 입력하세요.")
+    while choice not in ("1", "2", "3"):
+        print("1, 2, 3 중 하나를 입력하세요.")
         choice = input("선택: ").strip()
 
     if choice == "1":
         run_user_mode()
-    else:
+    elif choice == "2":
         run_json_mode()
+    else:
+        run_generator_mode()
 
 
 if __name__ == "__main__":
