@@ -14,6 +14,8 @@ import unicodedata
 EPSILON = 1e-9
 # 성능 분석에서 MAC 연산을 반복해 재는 횟수
 REPEAT = 10
+# data.json 모드의 성능 분석 크기
+PERF_SIZES = (3, 5, 13, 25)
 
 # data.json 은 main.py 와 같은 폴더에서 읽는다.
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
@@ -80,6 +82,29 @@ def normalize_label(raw):
     if not isinstance(raw, str):
         return None
     return LABEL_MAP.get(raw.strip().lower())
+
+
+# ---------------------------------------------------------------
+# 패턴 생성: N×N 십자가(Cross)와 X 패턴을 만든다
+# ---------------------------------------------------------------
+
+def generate_cross(size):
+    """가운데 행과 가운데 열이 1 인 size×size 십자가 패턴을 만든다."""
+    matrix = create_matrix(size)
+    center = size // 2
+    for i in range(size):
+        set_value(matrix, center, i, 1.0)
+        set_value(matrix, i, center, 1.0)
+    return matrix
+
+
+def generate_x(size):
+    """두 대각선이 1 인 size×size X 패턴을 만든다."""
+    matrix = create_matrix(size)
+    for i in range(size):
+        set_value(matrix, i, i, 1.0)
+        set_value(matrix, i, size - 1 - i, 1.0)
+    return matrix
 
 
 # ---------------------------------------------------------------
@@ -357,6 +382,21 @@ def print_case(result):
     print(f"판정: {result['decision']} | expected: {result['expected']} | {status}")
 
 
+def print_summary(results):
+    """전체 테스트 수, 통과 수, 실패 수와 실패 케이스 목록을 출력한다."""
+    failed = [result for result in results if not result["passed"]]
+    print(f"총 테스트: {len(results)}개")
+    print(f"통과: {len(results) - len(failed)}개")
+    print(f"실패: {len(failed)}개")
+    print()
+    if failed:
+        print("실패 케이스:")
+        for result in failed:
+            print(f"- {result['key']}: {result['reason']}")
+    else:
+        print("실패 케이스: 없음")
+
+
 def run_json_mode(path=DATA_FILE):
     """모드 2: data.json 의 필터와 패턴을 읽어 한꺼번에 판정한다."""
     print_section("[1] 필터 로드")
@@ -387,6 +427,17 @@ def run_json_mode(path=DATA_FILE):
         result = evaluate_case(key, case, filters, problems)
         print_case(result)
         results.append(result)
+
+    # 연산 시간은 크기에만 달려 있으므로, 크기마다 같은 방식으로 만든 십자가 패턴과
+    # X 필터로 잰다. data.json 에 없는 3×3 도 같은 방식으로 포함한다.
+    print_section(f"[3] 성능 분석 (평균/{REPEAT}회)")
+    rows = []
+    for size in PERF_SIZES:
+        rows.append((size, measure_ms(mac, generate_cross(size), generate_x(size))))
+    print_performance_table(rows)
+
+    print_section("[4] 결과 요약")
+    print_summary(results)
 
 
 # ---------------------------------------------------------------
