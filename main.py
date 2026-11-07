@@ -7,6 +7,8 @@ MAC(Multiply-Accumulate) 연산으로 입력 패턴이 어느 필터와 더 비�
 # 두 점수의 차이가 이 값보다 작으면 동점으로 본다 (부동소수점 오차 대비).
 EPSILON = 1e-9
 
+DIVIDER = "#" + "-" * 39
+
 
 # ---------------------------------------------------------------
 # 데이터 구조: n×n 2차원 배열 (리스트 안에 행 리스트를 담는다)
@@ -55,3 +57,106 @@ def judge(score_a, score_b, label_a, label_b, tie_label):
     if score_a > score_b:
         return label_a
     return label_b
+
+
+# ---------------------------------------------------------------
+# 출력 도우미
+# ---------------------------------------------------------------
+
+def print_section(title):
+    """구역 제목을 구분선과 함께 출력한다."""
+    print()
+    print(DIVIDER)
+    print(f"# {title}")
+    print(DIVIDER)
+
+
+# ---------------------------------------------------------------
+# 모드 1: 사용자 입력 (3×3)
+# ---------------------------------------------------------------
+
+def parse_row(line, size):
+    """공백으로 구분된 숫자 size 개를 읽는다.
+
+    성공하면 (숫자 목록, None), 형식이 틀리면 (None, 안내 문구) 를 돌려준다.
+    """
+    parts = line.split()
+    if len(parts) != size:
+        return None, f"입력 형식 오류: 각 줄에 {size}개의 숫자를 공백으로 구분해 입력하세요."
+    try:
+        return [float(part) for part in parts], None
+    except ValueError:
+        return None, (f"입력 형식 오류: 숫자가 아닌 값이 있습니다. "
+                      f"각 줄에 {size}개의 숫자를 공백으로 구분해 입력하세요.")
+
+
+def read_matrix(title, size=3):
+    """size 줄을 한 줄씩 입력받아 size×size 배열에 저장한다.
+
+    열 수가 다르거나 숫자가 아닌 값이 있는 줄은 안내 문구를 보여 주고 그 줄을 다시 받는다.
+    """
+    print(f"{title} ({size}줄 입력, 공백 구분)")
+    matrix = create_matrix(size)
+    row = 0
+    while row < size:
+        values, error = parse_row(input(), size)
+        if error:
+            print(error)
+            print(f"{row + 1}번째 줄을 다시 입력하세요.")
+            continue
+        for col, value in enumerate(values):
+            set_value(matrix, row, col, value)
+        row += 1
+    return matrix
+
+
+def run_user_mode():
+    """모드 1: 3×3 필터 A, B 와 패턴을 입력받아 MAC 점수로 판정한다."""
+    print_section("[1] 필터 입력")
+    filter_a = read_matrix("필터 A")
+    filter_b = read_matrix("필터 B")
+    print("필터 A, B 저장 완료")
+
+    print_section("[2] 패턴 입력")
+    pattern = read_matrix("패턴")
+
+    score_a = mac(pattern, filter_a)
+    score_b = mac(pattern, filter_b)
+    decision = judge(score_a, score_b, "A", "B", "판정 불가")
+
+    print_section("[3] MAC 결과")
+    print(f"A 점수: {score_a}")
+    print(f"B 점수: {score_b}")
+    if decision == "판정 불가":
+        print(f"판정: 판정 불가 (|A-B| < {EPSILON:g})")
+    else:
+        print(f"판정: {decision}")
+
+
+# ---------------------------------------------------------------
+# 시작: 모드 선택
+# ---------------------------------------------------------------
+
+def main():
+    print("=== Mini NPU Simulator ===")
+    print()
+    print("[모드 선택]")
+    print("1. 사용자 입력 (3x3)")
+    print("2. data.json 분석")
+    choice = input("선택: ").strip()
+    while choice not in ("1", "2"):
+        print("1 또는 2를 입력하세요.")
+        choice = input("선택: ").strip()
+
+    if choice == "1":
+        run_user_mode()
+    else:
+        print("data.json 분석은 아직 준비 중입니다.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        print("입력이 끝나 프로그램을 종료합니다.")
