@@ -26,6 +26,7 @@ UNDECIDED = "UNDECIDED"
 LABEL_MAP = {"+": CROSS, "cross": CROSS, "x": X}
 
 FILTER_KEY = re.compile(r"size_(\d+)")
+PATTERN_KEY = re.compile(r"size_(\d+)_(\d+)")
 
 DIVIDER = "#" + "-" * 39
 
@@ -286,6 +287,76 @@ def load_filters(data):
     return filters, problems
 
 
+def evaluate_case(key, case, filters, problems):
+    """패턴 하나를 검증하고 판정한다. 결과를 딕셔너리로 돌려준다.
+
+    키 해석, 필터 선택, 스키마, 크기 검사 중 하나라도 실패하면 프로그램을 멈추지 않고
+    그 케이스만 FAIL 로 처리해 reason 에 원인을 남긴다.
+    """
+    result = {"key": key, "cross": None, "x": None, "decision": None,
+              "expected": None, "passed": False, "reason": None}
+
+    # 1) 키 size_{N}_{idx} 에서 N 을 꺼내 size_N 필터를 고른다.
+    match = PATTERN_KEY.fullmatch(key)
+    if not match:
+        result["reason"] = "키 형식 오류 (size_{N}_{idx} 형태가 아닙니다)"
+        return result
+    size = int(match.group(1))
+    filter_key = f"size_{size}"
+    if filter_key not in filters:
+        if filter_key in problems:
+            result["reason"] = f"{filter_key} 필터를 쓸 수 없습니다: {problems[filter_key]}"
+        else:
+            result["reason"] = f"{filter_key} 필터가 없습니다"
+        return result
+
+    # 2) 스키마: input 과 expected 가 있어야 하고, expected 는 표준 라벨로 바꾼다.
+    if not isinstance(case, dict) or "input" not in case or "expected" not in case:
+        result["reason"] = "스키마 오류 (input 또는 expected 항목이 없습니다)"
+        return result
+    expected = normalize_label(case["expected"])
+    if expected is None:
+        result["reason"] = f"expected 라벨을 해석할 수 없습니다 ({case['expected']!r})"
+        return result
+    result["expected"] = expected
+
+    # 3) 패턴과 필터의 크기가 같은지 확인한다.
+    shape = shape_of(case["input"])
+    if shape is None:
+        result["reason"] = "패턴이 숫자로 된 2차원 배열이 아닙니다"
+        return result
+    if shape != (size, size):
+        result["reason"] = f"크기 불일치 (패턴 {shape[0]}×{shape[1]}, 필터 {size}×{size})"
+        return result
+
+    # 4) MAC 점수를 구해 판정하고 expected 와 비교한다.
+    pattern = case["input"]
+    cross_score = mac(pattern, filters[filter_key][CROSS])
+    x_score = mac(pattern, filters[filter_key][X])
+    decision = judge(cross_score, x_score, CROSS, X, UNDECIDED)
+    result.update(cross=cross_score, x=x_score, decision=decision)
+    if decision == UNDECIDED:
+        result["reason"] = "동점(UNDECIDED) 처리 규칙"
+    elif decision != expected:
+        result["reason"] = f"판정({decision})과 expected({expected}) 불일치"
+    else:
+        result["passed"] = True
+    return result
+
+
+def print_case(result):
+    """케이스 하나의 점수, 판정, PASS/FAIL 을 출력한다."""
+    print(f"--- {result['key']} ---")
+    if result["decision"] is None:
+        # 점수를 계산하기 전에 검증에서 걸린 케이스
+        print(f"FAIL: {result['reason']}")
+        return
+    print(f"{CROSS} 점수: {result['cross']}")
+    print(f"{X} 점수: {result['x']}")
+    status = "PASS" if result["passed"] else f"FAIL ({result['reason']})"
+    print(f"판정: {result['decision']} | expected: {result['expected']} | {status}")
+
+
 def run_json_mode(path=DATA_FILE):
     """모드 2: data.json 의 필터와 패턴을 읽어 한꺼번에 판정한다."""
     print_section("[1] 필터 로드")
@@ -305,6 +376,17 @@ def run_json_mode(path=DATA_FILE):
             print(f"{key} 필터 로드 완료 ({CROSS}, {X})")
         else:
             print(f"{key} 필터 로드 실패: {problems[key]}")
+
+    print_section("[2] 패턴 분석 (라벨 정규화 적용)")
+    patterns = data.get("patterns")
+    if not isinstance(patterns, dict):
+        print("스키마 오류: patterns 항목이 없거나 형식이 다릅니다.")
+        patterns = {}
+    results = []
+    for key, case in patterns.items():
+        result = evaluate_case(key, case, filters, problems)
+        print_case(result)
+        results.append(result)
 
 
 # ---------------------------------------------------------------
