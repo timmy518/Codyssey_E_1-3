@@ -4,6 +4,9 @@ MAC(Multiply-Accumulate) 연산으로 입력 패턴이 어느 필터와 더 비�
 콘솔 프로그램이다. 표준 라이브러리만 사용한다 (Python 3.8 이상).
 """
 
+import json
+import os
+import re
 import time
 import unicodedata
 
@@ -11,6 +14,18 @@ import unicodedata
 EPSILON = 1e-9
 # 성능 분석에서 MAC 연산을 반복해 재는 횟수
 REPEAT = 10
+
+# data.json 은 main.py 와 같은 폴더에서 읽는다.
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
+
+# 프로그램 안에서 쓰는 표준 라벨
+CROSS = "Cross"
+X = "X"
+UNDECIDED = "UNDECIDED"
+# data.json 의 여러 표기를 표준 라벨로 바꾸는 표 (앞뒤 공백을 지우고 소문자로 맞춘 뒤 찾는다)
+LABEL_MAP = {"+": CROSS, "cross": CROSS, "x": X}
+
+FILTER_KEY = re.compile(r"size_(\d+)")
 
 DIVIDER = "#" + "-" * 39
 
@@ -32,6 +47,38 @@ def get_value(matrix, row, col):
 def set_value(matrix, row, col, value):
     """(row, col) 위치에 값을 저장한다."""
     matrix[row][col] = value
+
+
+def shape_of(matrix):
+    """숫자로 된 2차원 배열이면 (행 수, 열 수) 를, 아니면 None 을 돌려준다.
+
+    행마다 열 수가 다르거나 숫자가 아닌 값이 섞여 있어도 None 이다.
+    """
+    if not isinstance(matrix, list):
+        return None
+    cols = None
+    for row in matrix:
+        if not isinstance(row, list):
+            return None
+        if cols is None:
+            cols = len(row)
+        elif len(row) != cols:
+            return None
+        for value in row:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+    return len(matrix), cols or 0
+
+
+# ---------------------------------------------------------------
+# 라벨 정규화: 여러 표기를 표준 라벨(Cross, X) 하나로 맞춘다
+# ---------------------------------------------------------------
+
+def normalize_label(raw):
+    """'+', 'cross', 'x' 같은 표기를 표준 라벨로 바꾼다. 모르는 표기면 None 을 돌려준다."""
+    if not isinstance(raw, str):
+        return None
+    return LABEL_MAP.get(raw.strip().lower())
 
 
 # ---------------------------------------------------------------
@@ -182,6 +229,85 @@ def run_user_mode():
 
 
 # ---------------------------------------------------------------
+# 모드 2: data.json 분석
+# ---------------------------------------------------------------
+
+def load_json(path):
+    """JSON 파일을 읽는다. 성공하면 (데이터, None), 실패하면 (None, 오류 문구)."""
+    try:
+        with open(path, encoding="utf-8") as file:
+            return json.load(file), None
+    except FileNotFoundError:
+        return None, f"data.json 파일을 찾을 수 없습니다: {path}"
+    except (OSError, ValueError) as error:
+        return None, f"data.json 을 읽을 수 없습니다: {error}"
+
+
+def load_filters(data):
+    """data["filters"] 를 읽어 크기별 필터를 표준 라벨로 정리한다.
+
+    돌려주는 값: (filters, problems)
+    - filters: {"size_5": {"Cross": 배열, "X": 배열}, ...} 처럼 쓸 수 있는 필터
+    - problems: {"size_13": "원인", ...} 처럼 쓸 수 없는 필터와 그 원인
+    """
+    filters = {}
+    problems = {}
+    raw_filters = data.get("filters")
+    if not isinstance(raw_filters, dict):
+        return filters, {"filters": "filters 항목이 없거나 형식이 다릅니다"}
+
+    for key, group in raw_filters.items():
+        match = FILTER_KEY.fullmatch(key)
+        if not match:
+            problems[key] = "키 형식 오류 (size_{N} 형태가 아닙니다)"
+            continue
+        if not isinstance(group, dict):
+            problems[key] = "필터 묶음이 객체가 아닙니다"
+            continue
+        size = int(match.group(1))
+        loaded = {}
+        for label_key, matrix in group.items():
+            label = normalize_label(label_key)
+            if label is None:
+                problems[key] = f"알 수 없는 필터 키 '{label_key}'"
+                break
+            shape = shape_of(matrix)
+            if shape != (size, size):
+                found = "숫자 2차원 배열 아님" if shape is None else f"{shape[0]}×{shape[1]}"
+                problems[key] = f"{label} 필터 크기 불일치 ({found}, 필요 {size}×{size})"
+                break
+            loaded[label] = matrix
+        else:
+            missing = [label for label in (CROSS, X) if label not in loaded]
+            if missing:
+                problems[key] = f"{', '.join(missing)} 필터가 없습니다"
+            else:
+                filters[key] = loaded
+    return filters, problems
+
+
+def run_json_mode(path=DATA_FILE):
+    """모드 2: data.json 의 필터와 패턴을 읽어 한꺼번에 판정한다."""
+    print_section("[1] 필터 로드")
+    data, error = load_json(path)
+    if error:
+        print(error)
+        return
+    if not isinstance(data, dict):
+        print("스키마 오류: data.json 의 최상위가 객체가 아닙니다.")
+        return
+
+    filters, problems = load_filters(data)
+    raw_filters = data.get("filters")
+    # data.json 에 적힌 순서대로 결과를 보여 준다.
+    for key in raw_filters if isinstance(raw_filters, dict) else problems:
+        if key in filters:
+            print(f"{key} 필터 로드 완료 ({CROSS}, {X})")
+        else:
+            print(f"{key} 필터 로드 실패: {problems[key]}")
+
+
+# ---------------------------------------------------------------
 # 시작: 모드 선택
 # ---------------------------------------------------------------
 
@@ -199,7 +325,7 @@ def main():
     if choice == "1":
         run_user_mode()
     else:
-        print("data.json 분석은 아직 준비 중입니다.")
+        run_json_mode()
 
 
 if __name__ == "__main__":
