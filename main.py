@@ -121,6 +121,27 @@ def mac(pattern, filt):
     return total
 
 
+def flatten(matrix):
+    """n×n 2차원 배열을 행 순서대로 이어 붙여 길이 n² 의 1차원 배열로 바꾼다."""
+    size = len(matrix)
+    flat = []
+    for row in range(size):
+        for col in range(size):
+            flat.append(get_value(matrix, row, col))
+    return flat
+
+
+def mac_flat(pattern, filt):
+    """1차원 배열로 바꾼 패턴과 필터의 MAC 점수 (보너스: 메모리 접근 단순화).
+
+    [행][열] 두 번 찾는 대신 인덱스 하나로 같은 위치를 찾고, 반복문도 하나로 줄였다.
+    """
+    total = 0.0
+    for index in range(len(pattern)):
+        total += pattern[index] * filt[index]
+    return total
+
+
 # ---------------------------------------------------------------
 # 점수 비교 정책: 허용오차(epsilon) 기반, 동점이면 판정하지 않는다
 # ---------------------------------------------------------------
@@ -184,6 +205,27 @@ def print_performance_table(rows):
     print("-" * display_width(header))
     for size, ms in rows:
         print(fit(f"{size}×{size}", 10) + fit(f"{ms:.4f}", 16, True) + fit(str(size * size), 16, True))
+
+
+def print_flat_comparison(rows):
+    """보너스: 2차원 MAC(최적화 전)과 1차원 MAC(최적화 후)의 평균 시간을 비교한다.
+
+    rows 는 성능 표에서 잰 (N, 2차원 평균 ms) 목록이다. 같은 입력(N×N 십자가 패턴, X 필터)을
+    1차원으로 바꾼 뒤 같은 반복 횟수로 다시 잰다. 1차원 변환 시간은 측정에 넣지 않는다.
+    """
+    print()
+    print(f"[보너스] 1차원 배열 최적화 전/후 비교 (평균/{REPEAT}회)")
+    header = (fit("크기(N×N)", 10) + fit("2차원(ms)", 14, True)
+              + fit("1차원(ms)", 14, True) + fit("시간 단축", 12, True))
+    print(header)
+    print("-" * display_width(header))
+    for size, before in rows:
+        pattern = flatten(generate_cross(size))
+        filt = flatten(generate_x(size))
+        after = measure_ms(mac_flat, pattern, filt)
+        saved = (before - after) / before * 100 if before > 0 else 0.0
+        print(fit(f"{size}×{size}", 10) + fit(f"{before:.4f}", 14, True)
+              + fit(f"{after:.4f}", 14, True) + fit(f"{saved:.1f}%", 12, True))
 
 
 # ---------------------------------------------------------------
@@ -435,6 +477,7 @@ def run_json_mode(path=DATA_FILE):
     for size in PERF_SIZES:
         rows.append((size, measure_ms(mac, generate_cross(size), generate_x(size))))
     print_performance_table(rows)
+    print_flat_comparison(rows)
 
     print_section("[4] 결과 요약")
     print_summary(results)
@@ -479,7 +522,9 @@ def run_generator_mode():
         print(f"{name} 패턴 입력 -> A 점수: {score_a}, B 점수: {score_b}, 판정: {decision}")
 
     print_section(f"[3] 성능 분석 (평균/{REPEAT}회)")
-    print_performance_table([(size, measure_ms(mac, cross, x_pattern))])
+    rows = [(size, measure_ms(mac, cross, x_pattern))]
+    print_performance_table(rows)
+    print_flat_comparison(rows)
 
 
 # ---------------------------------------------------------------
