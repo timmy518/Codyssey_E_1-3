@@ -4,8 +4,13 @@ MAC(Multiply-Accumulate) 연산으로 입력 패턴이 어느 필터와 더 비�
 콘솔 프로그램이다. 표준 라이브러리만 사용한다 (Python 3.8 이상).
 """
 
+import time
+import unicodedata
+
 # 두 점수의 차이가 이 값보다 작으면 동점으로 본다 (부동소수점 오차 대비).
 EPSILON = 1e-9
+# 성능 분석에서 MAC 연산을 반복해 재는 횟수
+REPEAT = 10
 
 DIVIDER = "#" + "-" * 39
 
@@ -60,6 +65,23 @@ def judge(score_a, score_b, label_a, label_b, tie_label):
 
 
 # ---------------------------------------------------------------
+# 성능 측정
+# ---------------------------------------------------------------
+
+def measure_ms(func, pattern, filt, repeat=REPEAT):
+    """func(pattern, filt) 를 repeat 번 호출해 1회 평균 시간(ms)을 돌려준다.
+
+    입력, 출력, 파일 읽기 시간은 빼고 연산 함수를 호출하는 구간만 잰다.
+    """
+    total = 0.0
+    for _ in range(repeat):
+        start = time.perf_counter()
+        func(pattern, filt)
+        total += time.perf_counter() - start
+    return total / repeat * 1000
+
+
+# ---------------------------------------------------------------
 # 출력 도우미
 # ---------------------------------------------------------------
 
@@ -69,6 +91,26 @@ def print_section(title):
     print(DIVIDER)
     print(f"# {title}")
     print(DIVIDER)
+
+
+def display_width(text):
+    """콘솔 화면 너비를 센다. 한글처럼 두 칸을 차지하는 글자는 2 로 센다."""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+
+
+def fit(text, width, right=False):
+    """text 를 화면 너비 width 에 맞게 공백으로 채운다. right 가 참이면 오른쪽 정렬."""
+    space = " " * max(0, width - display_width(text))
+    return space + text if right else text + space
+
+
+def print_performance_table(rows):
+    """크기별 성능 표를 출력한다. rows 는 (N, 평균 시간 ms) 목록이다."""
+    header = fit("크기(N×N)", 10) + fit("평균 시간(ms)", 16, True) + fit("연산 횟수(N²)", 16, True)
+    print(header)
+    print("-" * display_width(header))
+    for size, ms in rows:
+        print(fit(f"{size}×{size}", 10) + fit(f"{ms:.4f}", 16, True) + fit(str(size * size), 16, True))
 
 
 # ---------------------------------------------------------------
@@ -123,14 +165,20 @@ def run_user_mode():
     score_a = mac(pattern, filter_a)
     score_b = mac(pattern, filter_b)
     decision = judge(score_a, score_b, "A", "B", "판정 불가")
+    # MAC 1회(패턴 × 필터 하나) 평균 시간. 필터 A, B 를 각각 REPEAT 번 재서 평균한다.
+    elapsed = (measure_ms(mac, pattern, filter_a) + measure_ms(mac, pattern, filter_b)) / 2
 
     print_section("[3] MAC 결과")
     print(f"A 점수: {score_a}")
     print(f"B 점수: {score_b}")
+    print(f"연산 시간(평균/{REPEAT}회): {elapsed:.4f} ms")
     if decision == "판정 불가":
         print(f"판정: 판정 불가 (|A-B| < {EPSILON:g})")
     else:
         print(f"판정: {decision}")
+
+    print_section(f"[4] 성능 분석 (평균/{REPEAT}회)")
+    print_performance_table([(3, elapsed)])
 
 
 # ---------------------------------------------------------------
