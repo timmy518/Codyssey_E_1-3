@@ -4,6 +4,9 @@ MAC(Multiply-Accumulate) 연산으로 입력 패턴이 어느 필터와 더 비�
 콘솔 프로그램이다. 표준 라이브러리만 사용한다 (Python 3.8 이상).
 """
 
+# 두 점수의 차이가 이 값보다 작으면 동점으로 본다 (부동소수점 오차 대비).
+EPSILON = 1e-9
+
 
 # ---------------------------------------------------------------
 # 데이터 구조: n×n 2차원 배열 (리스트 안에 행 리스트를 담는다)
@@ -36,3 +39,19 @@ def mac(pattern, filt):
         for col in range(size):
             total += pattern[row][col] * filt[row][col]
     return total
+
+
+# ---------------------------------------------------------------
+# 점수 비교 정책: 허용오차(epsilon) 기반, 동점이면 판정하지 않는다
+# ---------------------------------------------------------------
+
+def judge(score_a, score_b, label_a, label_b, tie_label):
+    """두 점수를 EPSILON 기준으로 비교해 판정 라벨을 돌려준다.
+
+    차이가 EPSILON 보다 작으면 동점(tie_label), 아니면 점수가 큰 쪽의 라벨이다.
+    """
+    if abs(score_a - score_b) < EPSILON:
+        return tie_label
+    if score_a > score_b:
+        return label_a
+    return label_b
