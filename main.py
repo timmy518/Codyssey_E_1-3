@@ -491,8 +491,10 @@ def read_size():
     """생성할 크기 N 을 입력받는다. 십자가의 가운데 줄이 있도록 3 이상의 홀수만 받는다."""
     while True:
         text = input("크기 N 입력 (3 이상의 홀수): ").strip()
-        if text.isdigit() and int(text) >= 3 and int(text) % 2 == 1:
-            return int(text)
+        if text.isdecimal():
+            size = int(text)
+            if size >= 3 and size % 2 == 1:
+                return size
         print("입력 형식 오류: 3 이상의 홀수를 입력하세요.")
 
 
