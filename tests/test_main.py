@@ -1,7 +1,7 @@
 """(보충) main.py 단위 테스트
 
-미션 필수 항목은 아니고, 재현성 조건(예시 입력, 오류 입력, 케이스 단위 FAIL)을
-확인하려고 추가했다. 표준 라이브러리 unittest 만 쓴다.
+미션 필수 항목은 아니고, 재현성 조건(예시 입력, 오류 입력, 케이스 단위 FAIL,
+data.json 결과와 총합 일치)을 확인하려고 추가했다. 표준 라이브러리 unittest 만 쓴다.
 
 실행: python -m unittest discover -s tests
 """
@@ -166,6 +166,22 @@ class JsonModeTest(unittest.TestCase):
         with redirect_stdout(out):
             main.run_json_mode(os.path.join(ROOT, "no_such_file.json"))
         self.assertIn("data.json 파일을 찾을 수 없습니다", out.getvalue())
+
+
+class RealDataTest(unittest.TestCase):
+    """저장소의 data.json 결과가 README 결과 리포트와 같은지 확인한다."""
+
+    def test_totals_match_case_results(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            main.run_json_mode(main.DATA_FILE)
+        text = out.getvalue()
+        self.assertIn("총 테스트: 6개", text)
+        self.assertIn("통과: 3개", text)
+        self.assertIn("실패: 3개", text)
+        self.assertEqual(text.count("| PASS"), 3)
+        for key in ("size_5_1", "size_13_2", "size_25_1"):
+            self.assertIn(f"- {key}: 동점(UNDECIDED) 처리 규칙", text)
 
 
 if __name__ == "__main__":
