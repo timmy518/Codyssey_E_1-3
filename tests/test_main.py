@@ -80,6 +80,12 @@ class JudgeTest(unittest.TestCase):
         self.assertEqual(main.judge(5.0, 1.0, "A", "B", "판정 불가"), "A")
         self.assertEqual(main.judge(1.0, 5.0, "A", "B", "판정 불가"), "B")
 
+    def test_exact_epsilon_difference_is_not_a_tie(self):
+        # 차이가 EPSILON 과 같으면 '<' 비교라서 동점이 아니고, 그보다 작으면 동점이다.
+        self.assertEqual(abs(0.0 - main.EPSILON), main.EPSILON)
+        self.assertEqual(main.judge(0.0, main.EPSILON, "A", "B", "판정 불가"), "B")
+        self.assertEqual(main.judge(0.0, main.EPSILON / 2, "A", "B", "판정 불가"), "판정 불가")
+
     def test_float_error_is_a_tie(self):
         self.assertNotEqual(0.1 * 3, 0.3)
         self.assertEqual(main.judge(0.1 * 3, 0.3, "A", "B", "판정 불가"), "판정 불가")
