@@ -452,12 +452,15 @@ def run_json_mode(path=DATA_FILE):
 
     filters, problems = load_filters(data)
     raw_filters = data.get("filters")
-    # data.json 에 적힌 순서대로 결과를 보여 준다.
-    for key in raw_filters if isinstance(raw_filters, dict) else problems:
-        if key in filters:
-            print(f"{key} 필터 로드 완료 ({CROSS}, {X})")
-        else:
-            print(f"{key} 필터 로드 실패: {problems[key]}")
+    if isinstance(raw_filters, dict):
+        # data.json 에 적힌 순서대로 결과를 보여 준다.
+        for key in raw_filters:
+            if key in filters:
+                print(f"{key} 필터 로드 완료 ({CROSS}, {X})")
+            else:
+                print(f"{key} 필터 로드 실패: {problems[key]}")
+    else:
+        print(f"스키마 오류: {problems['filters']}.")
 
     print_section("[2] 패턴 분석 (라벨 정규화 적용)")
     patterns = data.get("patterns")
