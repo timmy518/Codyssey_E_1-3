@@ -88,6 +88,17 @@ Codyssey_E_1-3/
 - 표에 없는 표기는 None 이 되고, 그 케이스는 "expected 라벨을 해석할 수 없습니다" 로 FAIL 처리한다 (예: `normalize_label("o")` 는 None, 아래 [오류 입력 예시](#모드-2-일부러-망가뜨린-datajson-케이스-단위-fail) 의 size_5_2).
 - 화면 출력과 PASS/FAIL 비교는 모두 정규화한 표준 라벨로 한다.
 - 새 표기를 받아야 하면 `LABEL_MAP` 에 소문자 표기와 표준 라벨을 한 줄 넣는다. 예를 들어 `"plus": CROSS` 를 넣으면 data.json 의 `"expected": "plus"` 도 Cross 로 비교된다. `LabelTest` 에 같은 예를 넣어 확인한다.
+- 새 모양(예: 세모)을 세 번째 표준 라벨로 추가하려면 고칠 곳이 더 있다. 지금 코드는 Cross 와 X 두 라벨을 전제로 한다.
+  1. 표준 라벨 상수(예: `TRIANGLE = "Triangle"`)를 만들고 `LABEL_MAP` 에 표기(예: `"tri"`)를 넣는다.
+  2. `load_filters` 가 꼭 있어야 한다고 확인하는 라벨 목록 `(CROSS, X)` 에 새 라벨을 넣는다.
+  3. `evaluate_case` 는 지금 두 점수를 `judge` 로 비교한다. 라벨마다 점수를 구해 가장 큰 점수를 고르고, 1등과 2등의 차이가 1e-9 보다 작으면 UNDECIDED 로 바꾸도록 고친다.
+  4. `print_case` 가 새 라벨의 점수도 출력하게 한다.
+  5. data.json 의 `size_N` 필터마다 새 키를 넣고, 새 라벨이 expected 인 패턴을 넣어 `JsonModeTest` 처럼 확인한다.
+
+```
+"filters":  { "size_5": { "cross": [[...]], "x": [[...]], "tri": [[...]] } },
+"patterns": { "size_5_3": { "input": [[...]], "expected": "tri" } }
+```
 
 ### MAC 연산
 
@@ -125,7 +136,7 @@ Codyssey_E_1-3/
 3. `input` 과 `expected` 가 있는지, expected 를 표준 라벨로 바꿀 수 있는지 확인한다.
 4. 패턴이 숫자 배열이고 필터와 같은 N×N 크기인지 확인한다.
 
-필터도 로드할 때 키의 N 과 실제 크기가 같은지, Cross 와 X 가 모두 있는지 검사한다. 파일이 없거나 JSON 형식이 깨져도 안내 문구를 출력하고 끝낸다.
+필터도 로드할 때 키의 N 과 실제 크기가 같은지, Cross 와 X 가 모두 있는지 검사한다. 파일이 없거나 JSON 형식이 깨졌거나 최상위가 객체가 아니면 안내 문구를 출력하고 끝낸다. `filters` 나 `patterns` 항목이 없거나 객체가 아니면 `스키마 오류: filters 항목이 없거나 형식이 다릅니다.` 처럼 알리고 나머지를 계속 진행한다. 이때 filters 가 없으면 모든 케이스가 "size_N 필터가 없습니다" 로 FAIL 이 되고, patterns 가 없으면 총 0개로 요약한다.
 
 ### 성능 측정
 
@@ -548,7 +559,7 @@ X 패턴 입력 -> A 점수: 1.0, B 점수: 9.0, 판정: B
 
 ## (보충) 테스트
 
-미션 필수 항목은 아니고, 재현성 조건(예시 입력, 오류 입력, 케이스 단위 FAIL, data.json 결과와 총합 일치)을 확인하려고 표준 라이브러리 `unittest` 로 테스트 18개를 만들었다.
+미션 필수 항목은 아니고, 재현성 조건(예시 입력, 오류 입력, 케이스 단위 FAIL, data.json 결과와 총합 일치)을 확인하려고 표준 라이브러리 `unittest` 로 테스트 28개를 만들었다. 표준 라이브러리 `trace` 로 재 보면 테스트가 `main.py` 의 실행 가능한 347줄 중 341줄(98.3%)을 거친다. 나머지 6줄은 모듈로 불러서는 실행되지 않는 `if __name__ == "__main__":` 블록이라, `main.py` 를 직접 실행하는 테스트(`MenuTest`)로 확인한다.
 
 ```bash
 python -m unittest discover -s tests
@@ -562,5 +573,7 @@ python -m unittest discover -s tests
 | 라벨 정규화 (`+`, `cross`, `x` 등) | `LabelTest` |
 | 생성기 결과가 미션 예시와 같은지 | `GeneratorTest` |
 | 모드 1 예시 입력, 오류 줄 재입력, 동점이면 "판정 불가" | `UserModeTest` |
-| 모드 2 케이스 단위 FAIL, 동점이면 UNDECIDED 로 FAIL 집계, 파일 없음 | `JsonModeTest` |
+| 모드 2 케이스 단위 FAIL, 동점이면 UNDECIDED 로 FAIL 집계, 판정과 expected 가 다르면 FAIL, 실패 0개 요약, 필터 오류 5종(키 형식, 묶음 형식, 알 수 없는 키, 크기 불일치, X 누락), 파일 수준 오류(파일 없음, 깨진 JSON, 최상위 형식, filters·patterns 없음), 성능 표의 4개 크기와 N² | `JsonModeTest` |
+| 모드 3 크기 입력 검증(짝수, 위첨자 숫자, 3 미만, 문자), 생성 패턴 판정과 성능 표 | `GeneratorModeTest` |
+| 메뉴 잘못된 선택 재입력, 모드 분기, 입력이 도중에 끝날 때 오류 없이 종료 | `MenuTest` |
 | 저장소 data.json 결과(총 6 / 통과 3 / 실패 3)와 케이스별 PASS 수가 맞는지 | `RealDataTest` |
